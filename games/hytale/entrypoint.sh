@@ -659,7 +659,7 @@ ensure_creds() {
     log BLUE "[auth] Refreshing OAuth token"
     if _try_refresh; then auth_save; _cw "Credentials refreshed" && return 0; fi
   fi
-  if [ "$HYTALE_API_AUTH" = 1 ] || [ "$1" = 1 ]; then
+  if [ "$HYTALE_API_AUTH" = 1 ]; then
     log BLUE "[auth] Starting OAuth device flow"
     if oauth_ensure; then auth_save; _cw "Credentials acquired" && return 0; fi
     log RED "[auth] OAuth device flow failed"
