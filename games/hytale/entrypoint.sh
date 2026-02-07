@@ -642,6 +642,7 @@ session_ensure() {
 }
 
 session_cleanup() {
+  [ "$HYTALE_API_AUTH" != 1 ] && return 0
   [ -z "$S_TOK" ] && return 0
   log BLUE "[auth] Cleaning up game session"
   http "-" DELETE "$HYTALE_SESSION_LOGOUT_URL" -H "Authorization: Bearer $S_TOK" -H "Content-Type: application/json" >/dev/null 2>&1 || true
