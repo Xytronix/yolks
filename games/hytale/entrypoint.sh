@@ -452,10 +452,12 @@ if [ -d "$_ep_from" ]; then
     mv "$_ep_from" "$_ep_to"
   fi
 fi
-[ "$ACCEPT_EARLY_PLUGINS" = 1 ] && { qerr mkd "$EARLY_DIR"; log GREEN "[earlyplugins] ✓ Enabled"; } || log YELLOW "[earlyplugins] ✗ Disabled"
+if [ "$ACCEPT_EARLY_PLUGINS" = 1 ]; then
+  qerr mkd "$EARLY_DIR"; log GREEN "[earlyplugins] ✓ Enabled"
+else log YELLOW "[earlyplugins] ✗ Disabled"; fi
 
-[ "$ALLOW_OP" = 1 ] && export ALLOW_OP_FLAG="--allow-op" || export ALLOW_OP_FLAG=""
-[ "$DISABLE_SENTRY" = 1 ] && export DISABLE_SENTRY_FLAG="--disable-sentry" || export DISABLE_SENTRY_FLAG=""
+if [ "$ALLOW_OP" = 1 ]; then export ALLOW_OP_FLAG="--allow-op"; else export ALLOW_OP_FLAG=""; fi
+if [ "$DISABLE_SENTRY" = 1 ]; then export DISABLE_SENTRY_FLAG="--disable-sentry"; else export DISABLE_SENTRY_FLAG=""; fi
 
 if [ "$ENABLE_WORLD_BACKUP" = 1 ]; then
   export BACKUP_FLAG="--backup --backup-dir ../${BACKUP_DIR:-Backups} --backup-frequency ${BACKUP_FREQUENCY:-30} --backup-max-count ${BACKUP_MAX_COUNT:-5}"
@@ -608,7 +610,8 @@ _try_refresh() {
   [ -n "$R_TOK" ] || return 1
   refresh_token_known_expired && { auth_clear; return 1; }
   oauth_refresh && return 0
-  [ "$OAUTH_REFRESH_HARD_FAIL" = 1 ] && auth_clear; return 1
+  if [ "$OAUTH_REFRESH_HARD_FAIL" = 1 ]; then auth_clear; fi
+  return 1
 }
 oauth_ensure() {
   [ -z "${A_TOK:-}" ] && { _try_refresh && return 0; oauth_device_flow; return $?; }
@@ -658,7 +661,9 @@ session_cleanup() {
   [ -z "$S_TOK" ] && return 0
   log BLUE "[auth] Cleaning up game session"
   http "-" DELETE "$HYTALE_SESSION_LOGOUT_URL" -H "Authorization: Bearer $S_TOK" -H "Content-Type: application/json" >/dev/null 2>&1 || true
-  [ "$HTTP_CODE" = 200 ] || [ "$HTTP_CODE" = 204 ] && log GREEN "[auth] ✓ Session terminated" || log YELLOW "[auth] Session cleanup returned HTTP $HTTP_CODE (non-fatal)"
+  if [ "$HTTP_CODE" = 200 ] || [ "$HTTP_CODE" = 204 ]; then
+    log GREEN "[auth] ✓ Session terminated"
+  else log YELLOW "[auth] Session cleanup returned HTTP $HTTP_CODE (non-fatal)"; fi
   S_TOK= I_TOK= S_EXP=0; auth_save
 }
 
@@ -832,7 +837,7 @@ if [ "$USE_AOT_CACHE" = 1 ] && [ -f "$SERVER_DIR/HytaleServer.aot" ]; then
   [ "$USE_COMPACT_HEADERS" = 1 ] && log YELLOW "[aot] CompactObjectHeaders disabled (incompatible with AOT)"
 else
   export AOT_FLAG=""
-  [ "$USE_COMPACT_HEADERS" = 1 ] && export COMPACT_HEADERS_FLAG="-XX:+UseCompactObjectHeaders" || export COMPACT_HEADERS_FLAG=""
+  if [ "$USE_COMPACT_HEADERS" = 1 ]; then export COMPACT_HEADERS_FLAG="-XX:+UseCompactObjectHeaders"; else export COMPACT_HEADERS_FLAG=""; fi
 fi
 
 if [ "$HYTALE_API_AUTH" = 1 ]; then
@@ -841,7 +846,11 @@ if [ "$HYTALE_API_AUTH" = 1 ]; then
     export HYTALE_SERVER_SESSION_TOKEN="$S_TOK" HYTALE_SERVER_IDENTITY_TOKEN="$I_TOK"
     auth_save; creds_write || true
     log GREEN "[auth] ✓ Tokens ready (access $(fmt_exp "$A_EXP"), session $(fmt_exp "$S_EXP"), refresh $(fmt_exp "$R_EXP"))"
-  else log YELLOW "[auth] Continuing without pre-acquired tokens (use /auth login device)"; fi
+  else
+    S_TOK= I_TOK= S_EXP=0
+    unset HYTALE_SERVER_SESSION_TOKEN HYTALE_SERVER_IDENTITY_TOKEN 2>/dev/null || true
+    log YELLOW "[auth] Continuing without pre-acquired tokens (use /auth login device)"
+  fi
 else
   S_TOK= I_TOK= S_EXP=0
   unset HYTALE_SERVER_SESSION_TOKEN HYTALE_SERVER_IDENTITY_TOKEN 2>/dev/null || true
