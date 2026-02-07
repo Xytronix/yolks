@@ -99,7 +99,7 @@ startup_abort() {
 
 trim_file() {
   [ -f "$1" ] || return 1
-  tr -d '\r\n ' <"$1"
+  sed -e 's/\r//g' -e 's/^[[:space:]]*//; s/[[:space:]]*$//' "$1" | tr -d '\n'
 }
 valid_patchline() { case "$1" in release | pre-release) echo "$1" ;; *) echo release ;; esac }
 valid_version() { [[ -n "$1" && "$1" =~ $VERSION_PATTERN ]]; }
@@ -119,6 +119,7 @@ cd "$ROOT_DIR" || die "Failed to cd to $ROOT_DIR"
 rm -rf "$TMP_BASE"
 mkd "$TMP_BASE" || die "Failed to create $TMP_BASE"
 mkd "$SERVER_DIR" || die "Failed to create $SERVER_DIR"
+# server jar expects start.sh to exist when using /update
 [ -f "$ROOT_DIR/start.sh" ] || touch "$ROOT_DIR/start.sh" 2>/dev/null || true
 
 INTERNAL_IP=$(ip route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
@@ -330,6 +331,7 @@ maven_meta() {
   # caches metadata per patchline to avoid repeat API calls
   local pl="${1:-$PATCHLINE}" cache="$TMP_BASE/maven-metadata-${1:-$PATCHLINE}.xml"
   if [ -f "$cache" ]; then
+    HTTP_CODE=200
     cat "$cache"
     return 0
   fi
@@ -406,7 +408,7 @@ find_backup() {
     [ -n "$b" ] || continue
     [ -n "$skip" ] && [ "$(basename "$b")" = "$skip" ] && continue
     [ -f "$b/Server/HytaleServer.jar" ] && { echo "$b"; return 0; }
-  done < <(ls -1td "$dir"/*/ 2>/dev/null || true)
+  done < <(ls -1d "$dir"/*/ 2>/dev/null | sort -r || true)
   return 1
 }
 
@@ -439,7 +441,17 @@ EARLY_OFF="$SERVER_DIR/earlyplugins.disabled"
 if [ "$ACCEPT_EARLY_PLUGINS" = 1 ]; then
   export ACCEPT_EARLY_PLUGINS_FLAG="--accept-early-plugins"; _ep_from="$EARLY_OFF" _ep_to="$EARLY_DIR"
 else export ACCEPT_EARLY_PLUGINS_FLAG=""; _ep_from="$EARLY_DIR" _ep_to="$EARLY_OFF"; fi
-[ -d "$_ep_from" ] && { [ -d "$_ep_to" ] && { cp -a -n "$_ep_from/." "$_ep_to/"; rmq "$_ep_from"; } || mv "$_ep_from" "$_ep_to"; }
+if [ -d "$_ep_from" ]; then
+  if [ -d "$_ep_to" ]; then
+    if cp -a -n "$_ep_from/." "$_ep_to/"; then
+      rmq "$_ep_from"
+    else
+      log RED "[earlyplugins] copy failed, aborting deleting $_ep_from"
+    fi
+  else
+    mv "$_ep_from" "$_ep_to"
+  fi
+fi
 [ "$ACCEPT_EARLY_PLUGINS" = 1 ] && { qerr mkd "$EARLY_DIR"; log GREEN "[earlyplugins] ✓ Enabled"; } || log YELLOW "[earlyplugins] ✗ Disabled"
 
 [ "$ALLOW_OP" = 1 ] && export ALLOW_OP_FLAG="--allow-op" || export ALLOW_OP_FLAG=""
@@ -745,8 +757,9 @@ plan() {
       local maven_latest; maven_latest=$(maven_get_latest "$PATCHLINE" 2>/dev/null || echo "")
       [ -n "$maven_latest" ] && [ "$maven_latest" = "$TARGET" ] && { log CYAN "[update] $TARGET is latest on $PATCHLINE, using downloader"; PLAN=downloader; REQUIRE_CREDS=1; return; }
       maven_version_exists "$PATCHLINE" "$TARGET" && { log CYAN "[update] Found $TARGET on Maven ($PATCHLINE)"; PLAN=maven; ENSURE_ASSETS=1; return; }
-      if [ "$HTTP_CODE" = 000 ] || [[ "$HTTP_CODE" =~ ^5[0-9][0-9]$ ]]; then
-        log RED "[update] Cannot verify version $TARGET (network error, HTTP $HTTP_CODE)"; die "STARTUP ABORTED: Cannot verify version availability"
+      local mvn_code="$HTTP_CODE"
+      if [ "$mvn_code" = 000 ] || [[ "$mvn_code" =~ ^5[0-9][0-9]$ ]]; then
+        log RED "[update] Cannot verify version $TARGET (network error, HTTP $mvn_code)"; die "STARTUP ABORTED: Cannot verify version availability"
       fi
       log RED "[update] Version $TARGET not available on $PATCHLINE patchline"
       log_block YELLOW "[update] Check a different patchline (e.g., pre-release)" "[update] Downloader can only fetch latest" "[update] Use SERVER_VERSION=latest for newest"
