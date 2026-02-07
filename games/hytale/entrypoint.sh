@@ -775,10 +775,10 @@ apply_plan() {
       fi
       v=$(save_meta 2>/dev/null || true); [ -z "$v" ] && printf '%s' "$TARGET" >"$SERVER_DIR/.version"
       log GREEN "[update] ✓ Downloaded server $TARGET"
-      [ "$ENSURE_ASSETS" = 1 ] && [ ! -f "$ROOT_DIR/Assets.zip" ] && {
+      if [ "$ENSURE_ASSETS" = 1 ] && [ ! -f "$ROOT_DIR/Assets.zip" ]; then
         log BLUE "[update] Downloading assets via downloader"
         ensure_downloader || true; ensure_creds 0 && downloader_assets_only "$PATCHLINE" || log YELLOW "[update] Warning: Assets download failed"
-      } ;;
+      fi ;;
     downloader)
       ensure_downloader || return 1; ensure_creds "$REQUIRE_CREDS"
       if ! creds_valid; then
