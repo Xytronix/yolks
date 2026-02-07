@@ -828,7 +828,11 @@ if [ "$HYTALE_API_AUTH" = 1 ]; then
     auth_save; creds_write || true
     log GREEN "[auth] ✓ Tokens ready (access $(fmt_exp "$A_EXP"), session $(fmt_exp "$S_EXP"), refresh $(fmt_exp "$R_EXP"))"
   else log YELLOW "[auth] Continuing without pre-acquired tokens (use /auth login device)"; fi
-else log CYAN "[auth] Disabled (use /auth login device)"; fi
+else
+  S_TOK= I_TOK= S_EXP=0
+  unset HYTALE_SERVER_SESSION_TOKEN HYTALE_SERVER_IDENTITY_TOKEN 2>/dev/null || true
+  log CYAN "[auth] Disabled (use /auth login device)"
+fi
 
 STARTUP="${STARTUP:-}"
 
