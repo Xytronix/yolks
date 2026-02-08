@@ -73,9 +73,7 @@ NC=$(tput sgr0 2>/dev/null || echo '')
 log() {
   local c="$1"
   shift
-  if [ "$c" = RED ]; then
-    printf "%b\n" "${RED}$*${NC}" >&2
-  else printf "%b\n" "${!c}$*${NC}"; fi
+  printf "%b\n" "${!c}$*${NC}" >&2
 }
 log_block() {
   local c="$1"; shift
